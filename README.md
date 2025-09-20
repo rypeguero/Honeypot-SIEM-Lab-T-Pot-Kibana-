@@ -109,7 +109,7 @@ sudo ufw allow 22,23,80,443/tcp
 sudo ufw status verbose
 ```
 
-![UFW Status (pre-lockdown)](docs/images/ufw_status.png)
+![UFW Status (pre-lockdown)](docs/images/UFW%20Status.png)
 
 ---
 
