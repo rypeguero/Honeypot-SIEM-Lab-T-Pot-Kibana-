@@ -122,16 +122,16 @@ sudo docker ps --format "table {{.Names}}\t{{.Ports}}"
 sudo ss -tulnp | grep -E ':(22|23|80|443|64297)\b'
 ```
 
-![Docker Containers](docs/images/docker_ps.png)
-![Listeners & Ports](docs/images/docker_and_ss.png)
+![Docker Containers](docs/images/Docker%20Containers.png)
+![Listeners & Ports](docs/images/Listeners%20%26%20Ports.png)
 
 Open the portal via your tunnel:
 
 * `https://localhost:64297` → click **Kibana** → **Discover**.
 
-![T‑Pot Portal](docs/images/portal_landing.png)
-![Attack Map](docs/images/attack_map.png)
-![Kibana Dashboard](docs/images/kibana_dashboard.png)
+![T‑Pot Portal](docs/images/T-pot%20Portal.png)
+![Attack Map](docs/images/Attack%20Map.png)
+![Kibana Dashboard](docs/images/Kibana%20Dashboard.png)
 
 ---
 
@@ -180,14 +180,15 @@ message:*cowrie* and (message:*wget* or message:*curl* or event.id:*file_downloa
 
 > **Screenshots**
 
-![Kibana Discover — Suricata (broad)](docs/images/kibana_discover_suricata.png)
-![Kibana Discover — Suricata High/Med Alerts](docs/images/kibana_suricata_alerts.png)
+![Kibana Discover — Suricata (broad)](docs/images/Kibana%20Discover%20Suricata.png)
+![Kibana Discover — Suricata High/Med Alerts](docs/images/Kibana%20-%20Suricata%20High%26Med%20Alerts.png)
 
 ---
 
 ## Executive Summary
 
-* One paragraph on activity volume & notable findings.
+* Upon immidiate launch, we can see the attack map becoming active as the open ports get attacked from all over the world.
+* This gives us enough raw data to collect and observe. we can write queries to find specific info on any specific target.
 
 ## Notable Events
 
@@ -212,11 +213,6 @@ message:*cowrie* and (message:*wget* or message:*curl* or event.id:*file_downloa
 * Cowrie — Login Success — saved search link
 * Cowrie — Downloads — saved search link
 
-## Screenshots
-
-* ![Dashboard Overview](docs/images/YYYY‑WW_dashboard.png)
-* ![Discover — Suricata High/Med](docs/images/YYYY‑WW_suricata.png)
-* ![Discover — Cowrie Downloads](docs/images/YYYY‑WW_cowrie.png)
 
 ## Next Actions
 
@@ -224,9 +220,8 @@ message:*cowrie* and (message:*wget* or message:*curl* or event.id:*file_downloa
 * Tune KQL / add visualizations (top signatures, top src IPs)
 * Consider adding Wazuh or WireGuard in Phase 2
 
-```
+---
 
-> **Screenshot prompts** are embedded; place images under `docs/images/` and link them in reports.
 
 ---
 
