@@ -1,241 +1,351 @@
-# Honeypot SIEM Lab (T‑Pot + Kibana)
+# T-Pot Honeypot Deployment Guide
 
-A single‑VPS honeypot lab for practicing log correlation, detections, and weekly reporting. Uses **T‑Pot Standard (HIVE)** on Ubuntu 24.04 and keeps all admin UIs private via an **SSH tunnel**.
+This repository documents how I deployed a T-Pot honeypot lab on a public VPS for blue-team learning and SIEM practice. It focuses on installation, secure administrative access, exposed decoy ports, service verification, and basic Kibana access.
 
-> ⚠️ Ethics & Safety: Honeypots must be passive. Do not pivot or retaliate. Confirm your VPS provider allows honeypots. Expose only decoy ports.
+This repository is for the **deployment and setup process only**. SOC-style analysis reports, screenshots, KQL findings, and honeypot telemetry writeups are documented separately in my [Honeypot SIEM Lab](https://github.com/rypeguero/honeypot-siem-lab) repository.
+
+> ⚠️ Ethics & Safety: Honeypots must be passive. Do not pivot, retaliate, or interact with systems that connect to the honeypot. Confirm your VPS provider allows honeypot activity and expose only intentional decoy services.
 
 ---
 
-## Table of contents
+## Table of Contents
 
-* [Architecture](#architecture)
-* [Prereqs](#prereqs)
-* [Deploy (quick)](#deploy-quick)
-* [Secure access (SSH tunnel)](#secure-access-ssh-tunnel)
-* [Open decoy ports](#open-decoy-ports)
-* [Verify T‑Pot](#verify-t-pot)
-* [Kibana data view & starter KQL](#kibana-data-view--starter-kql)
-* [Screenshots to capture](#screenshots-to-capture)
-* [Future work](#future-work)
-* [Attribution](#attribution)
+- [Architecture](#architecture)
+- [Prerequisites](#prerequisites)
+- [Deploy T-Pot](#deploy-t-pot)
+- [Secure Access](#secure-access)
+- [Open Decoy Ports](#open-decoy-ports)
+- [Verify T-Pot](#verify-t-pot)
+- [Kibana Access and Starter Queries](#kibana-access-and-starter-queries)
+- [Maintenance](#maintenance)
+- [Troubleshooting](#troubleshooting)
+- [Related Repository](#related-repository)
+- [Attribution](#attribution)
 
 ---
 
 ## Architecture
 
-* **VPS (Ubuntu 24.04 LTS):** runs **T‑Pot Standard (HIVE)** (multi‑honeypot + Suricata + ELK).
-* **Admin access:** via **SSH on 64295** and **local port‑forward** to portal `64297` (no public access).
-* **Public exposure:** only decoy ports (e.g., 22/23/80/443).
+- **VPS:** Ubuntu 24.04 LTS running T-Pot Community Edition.
+- **Admin SSH:** T-Pot moves administrative SSH to port `64295`.
+- **Web Portal:** T-Pot web portal is available on port `64297`.
+- **Public Exposure:** Honeypot/decoy services listen on selected public ports such as `22`, `23`, `80`, `443`, and others depending on the T-Pot profile.
+- **Analysis Stack:** T-Pot includes Elastic, Kibana, Logstash, Suricata, and multiple honeypots.
 
-```
-Internet ──> [VPS/T‑Pot] ──(ssh -L 64297:127.0.0.1:64297)──> Admin’s browser (https://localhost:64297)
+```text
+Internet traffic -> VPS / T-Pot honeypot services -> Elastic / Kibana dashboards
+Admin access -> SSH on port 64295 -> T-Pot portal on port 64297
 ```
 
 ---
 
-## Prereqs
+## Prerequisites
 
-* A fresh **Ubuntu 24.04 LTS** VPS.
-* SSH key for login.
-* Local machine (Linux/macOS/Windows) with OpenSSH.
+- Fresh Ubuntu 24.04 LTS VPS
+- SSH access to the VPS
+- Non-root user account for installation
+- Strong password for T-Pot web access
+- Basic familiarity with Linux commands, SSH, and firewall rules
 
 ---
 
-## Deploy (quick)
+## Deploy T-Pot
 
-Run these on the **VPS** (user `ops`, via normal SSH):
+Run the installer from a non-root user account on the VPS.
 
 ```bash
-# 1) Baseline
-sudo apt update && sudo apt -y install curl ufw
+# Update the server
+sudo apt update && sudo apt upgrade -y
 
-# 2) Avoid lockout when T‑Pot moves SSH to 64295
-sudo ufw allow OpenSSH
-sudo ufw allow 64295/tcp
-sudo ufw --force enable
+# Install curl if needed
+sudo apt install curl -y
 
-# 3) Install T‑Pot (run as NON‑ROOT from $HOME)
+# Run the T-Pot installer from the user's home directory
 cd ~
 env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/install.sh)"
-# choose: H  (Standard/HIVE)
-# set WEB_USER + strong WEB_PASSWORD
+```
 
-# 4) Reboot when the installer prompts
+During installation:
+
+- Select the desired T-Pot edition/profile.
+- Create the T-Pot web username and password.
+- Reboot when prompted.
+
+```bash
 sudo reboot
 ```
 
-After reboot, T‑Pot’s real SSH is on **64295**.
-
----
-
-## Secure access (SSH tunnel)
-
-Create a shortcut on your **local machine**:
-
-```ssh-config
-# ~/.ssh/config
-Host tpot
-  HostName YOUR_VPS_IP
-  User ops
-  Port 64295
-  LocalForward 64297 127.0.0.1:64297
-  ServerAliveInterval 30
-  ServerAliveCountMax 3
-```
-
-Use it:
+After reboot, reconnect using the T-Pot SSH port:
 
 ```bash
-ssh tpot
-# Then browse: https://localhost:64297 (login with WEB_USER/WEB_PASSWORD)
-```
-
-Block public access to the portal (on the **VPS**):
-
-```bash
-sudo ufw delete allow 64297/tcp 2>/dev/null || true
-sudo ufw deny 64297/tcp
+ssh -p 64295 <username>@<VPS_PUBLIC_IP>
 ```
 
 ---
 
-## Open decoy ports
+## Secure Access
 
-Pick a minimal, safe set (you can expand later):
+T-Pot uses port `64295` for SSH after installation.
+
+Example SSH command:
 
 ```bash
-# VPS
-sudo ufw allow 22,23,80,443/tcp
-sudo ufw status verbose
+ssh -p 64295 <username>@<VPS_PUBLIC_IP>
 ```
 
-![UFW Status (pre-lockdown)](docs/images/UFW%20Status.png)
+The T-Pot web portal is available at:
+
+```text
+https://<VPS_PUBLIC_IP>:64297
+```
+
+For a safer setup, restrict administrative access to trusted IP addresses where possible. Do not expose management services more than necessary.
+
+If using a host firewall, make sure you do not accidentally block honeypot collection traffic unless that is intentional.
 
 ---
 
-## Verify T‑Pot
+## Open Decoy Ports
 
-On the **VPS**:
+T-Pot exposes multiple honeypot services so internet scanners and automated probes can interact with decoy services.
+
+Common ports observed or used in this lab include:
+
+| Port | Purpose |
+|---:|---|
+| 22 | SSH honeypot activity |
+| 23 | Telnet honeypot activity |
+| 80 | HTTP/web honeypot activity |
+| 443 | HTTPS/web honeypot activity |
+| 445 | SMB-related probing |
+| 9200 | Elasticsearch-related probing |
+| 5432 | PostgreSQL-related probing |
+| 8728 | MikroTik/RouterOS-related probing |
+
+> Note: The exact exposed ports depend on the T-Pot configuration and active containers.
+
+### Firewall / Port Screenshot
+
+![UFW Status](docs/images/UFW%20Status.png)
+
+---
+
+## Verify T-Pot
+
+Check the T-Pot service:
 
 ```bash
-sudo docker ps --format "table {{.Names}}\t{{.Ports}}"
-sudo ss -tulnp | grep -E ':(22|23|80|443|64297)\b'
+sudo systemctl status tpot --no-pager
 ```
+
+Start T-Pot manually if needed:
+
+```bash
+sudo systemctl start tpot
+```
+
+Enable T-Pot to start automatically after reboot:
+
+```bash
+sudo systemctl enable tpot
+```
+
+Confirm it is enabled:
+
+```bash
+sudo systemctl is-enabled tpot
+```
+
+Check running T-Pot containers:
+
+```bash
+sudo dps
+```
+
+If `dps` is unavailable, use Docker directly:
+
+```bash
+sudo docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+```
+
+Check listening ports:
+
+```bash
+sudo ss -tulnp
+```
+
+### Service Verification Screenshots
 
 ![Docker Containers](docs/images/Docker%20Containers.png)
-![Listeners & Ports](docs/images/Listeners%20%26%20Ports.png)
 
-Open the portal via your tunnel:
-
-* `https://localhost:64297` → click **Kibana** → **Discover**.
-
-![T‑Pot Portal](docs/images/T-pot%20Portal.png)
-![Attack Map](docs/images/Attack%20Map.png)
-![Kibana Dashboard](docs/images/Kibana%20Dashboard.png)
+![Listeners and Ports](docs/images/Listeners%20%26%20Ports.png)
 
 ---
 
-## Kibana data view & starter KQL
+## Kibana Access and Starter Queries
 
-Set **Data view** to `logstash-*` (create if needed). Time: **Last 7 days**.
+Open the T-Pot portal and launch Kibana:
 
-Paste into the **KQL query bar** in Discover:
+```text
+https://<VPS_PUBLIC_IP>:64297
+```
 
-**A) All Suricata**
+In Kibana Discover, use the `logstash-*` data view.
+
+### T-Pot Portal and Dashboard Screenshots
+
+![T-Pot Portal](docs/images/T-pot%20Portal.png)
+
+![Attack Map](docs/images/Attack%20Map.png)
+
+![Kibana Dashboard](docs/images/Kibana%20Dashboard.png)
+
+### Starter KQL Queries
+
+#### Suricata events
 
 ```kql
 path:"/data/suricata/log/eve.json"
 ```
 
-**B) Alerts only**
+#### Suricata alerts only
 
 ```kql
 path:"/data/suricata/log/eve.json" and event_type:alert
 ```
 
-**C) High/Med alerts**
+#### Cowrie activity
 
 ```kql
-path:"/data/suricata/log/eve.json" and event_type:alert and (alert.severity:1 or alert.severity:2)
+type.keyword: "Cowrie"
 ```
 
-**D) Cowrie successes**
+#### Honeytrap activity
 
 ```kql
-message:*cowrie* and (event.id:"cowrie.login.success" or cowrie.eventid:"cowrie.login.success")
+type.keyword: "Honeytrap"
 ```
 
-**E) Cowrie downloads (curl/wget)**
+#### Filter out VPS source IP and dashboard traffic
 
 ```kql
-message:*cowrie* and (message:*wget* or message:*curl* or event.id:*file_download* or cowrie.eventid:*file_download*)
+src_ip: * and not src_ip: "<VPS_PUBLIC_IP>" and not DestPort: 64297
 ```
 
-*Add useful columns from the left panel (click **+**):*
+Helpful fields to review in Kibana:
 
-* Suricata: `src_ip`, `dest_ip`, `dest_port` (or `DestPort`), `app_proto`, `alert.signature`.
-* Cowrie: `source.ip` (or `src_ip`), `user.name`, `cowrie.password`, `url.full`.
-
-*Save each search* (floppy icon) and add to a new dashboard (e.g., **Honeypot — Dashboard**).
-
-> **Screenshots**
-
-![Kibana Discover — Suricata (broad)](docs/images/Kibana%20Discover%20Suricata.png)
-![Kibana Discover — Suricata High/Med Alerts](docs/images/Kibana%20-%20Suricata%20High%26Med%20Alerts.png)
+- `src_ip`
+- `DestPort` or `dest_port`
+- `geoip.country_name`
+- `type.keyword`
+- `event_type`
+- `alert.signature`
+- `username`
+- `password`
+- `input`
 
 ---
 
-## Executive Summary
+## Maintenance
 
-* Upon immidiate launch, we can see the attack map becoming active as the open ports get attacked from all over the world.
-* This gives us enough raw data to collect and observe. we can write queries to find specific info on any specific target.
+Useful commands:
 
-## Notable Events
+```bash
+# Check service status
+sudo systemctl status tpot --no-pager
 
-* 2025‑09‑18 21:57Z — Suricata alert `ALERT_SIGNATURE` — src\_ip → dest\_port (screenshot link)
-* … 3–5 bullets
+# Start T-Pot
+sudo systemctl start tpot
 
-## TTPs (MITRE ATT\&CK)
+# Stop T-Pot
+sudo systemctl stop tpot
 
-* T1059 Command and Scripting Interpreter (Cowrie commands)
-* T1105 Ingress Tool Transfer (downloads)
-* T1190 Exploit Public‑Facing Application (web hits)
+# Enable auto-start after reboot
+sudo systemctl enable tpot
 
-## IOCs
+# View recent service logs
+sudo journalctl -u tpot -n 100 --no-pager
 
-* IPs: x.x.x.x, …
-* URLs/domains: http\[:]//example\[.]com/payload
-* Hashes: sha256: …
+# Check containers
+sudo dps
+```
 
-## Detections / Queries Used
+If the VPS reboots and T-Pot does not come back online, confirm the service is enabled:
 
-* Suricata — High/Med Alerts (24h) — saved search link
-* Cowrie — Login Success — saved search link
-* Cowrie — Downloads — saved search link
-
-
-## Next Actions
-
-* Expand decoy ports (e.g., 445/3389) cautiously
-* Tune KQL / add visualizations (top signatures, top src IPs)
-* Consider adding Wazuh or WireGuard in Phase 2
+```bash
+sudo systemctl is-enabled tpot
+```
 
 ---
 
+## Troubleshooting
+
+### Cannot SSH after installation
+
+T-Pot moves SSH to port `64295`.
+
+```bash
+ssh -p 64295 <username>@<VPS_PUBLIC_IP>
+```
+
+### Web portal does not load
+
+Check whether Nginx is listening on port `64297`:
+
+```bash
+sudo ss -lntp | grep 64297
+```
+
+Test locally from the VPS:
+
+```bash
+curl -k -I https://127.0.0.1:64297
+```
+
+A `401 Unauthorized` response means the portal is running and asking for authentication.
+
+### T-Pot is inactive after reboot
+
+Enable automatic startup:
+
+```bash
+sudo systemctl enable tpot
+sudo systemctl start tpot
+```
+
+### Containers are still starting
+
+Some services, especially Kibana, Logstash, and Elasticsearch, may take a few minutes to become healthy after startup.
+
+```bash
+sudo dps
+```
 
 ---
 
-## Future work
-- Add **RDP/SMB** decoys (445/3389) after monitoring current noise.
-- Optional **WireGuard** for portal access instead of SSH tunneling.
-- Add malware sample capture (quarantined), separate egress‑blocked sandbox.
+## Related Repository
+
+SOC analysis reports and honeypot findings are documented separately here:
+
+[Honeypot SIEM Lab](https://github.com/rypeguero/honeypot-siem-lab)
+
+This keeps the deployment guide separate from the investigation reports.
+
+---
+
+## Future Work
+
+- Add tighter management access controls.
+- Document firewall rules for different deployment models.
+- Add optional VPN or SSH tunnel workflow for portal access.
+- Add a separate troubleshooting guide for common T-Pot startup issues.
 
 ---
 
 ## Attribution
-This lab is powered by **T‑Pot Community Edition** by Deutsche Telekom Security:  
-**https://github.com/telekom-security/tpotce**
 
-If you publish this project, please credit T‑Pot in your README.
+This lab is powered by **T-Pot Community Edition** by Deutsche Telekom Security:
 
-```
+https://github.com/telekom-security/tpotce
+
+If you publish a T-Pot-based project, credit the T-Pot project in your README.
